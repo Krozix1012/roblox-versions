@@ -72,7 +72,7 @@ async function main() {
     let bytes = 0;
     const queue = [...pkgs];
     await Promise.all(Array.from({ length: 4 }, async () => {
-      while (queue.length) { const p = queue.shift(); bytes += await download(`${CDN}/${hash}-${p.name}`, path.join(dir, `${hash}-${p.name}`), p.md5); }
+      while (queue.length) { const p = queue.shift(); const n = await download(`${CDN}/${hash}-${p.name}`, path.join(dir, `${hash}-${p.name}`), p.md5); bytes += n; }
     }));
     log(`Downloaded ${pkgs.length} packages (${Math.round(bytes / 1048576)} MB), all checksums match. Uploading...`);
     const released = await robloxRelease(number);
