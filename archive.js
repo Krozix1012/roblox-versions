@@ -1,7 +1,7 @@
 // Roblox version archive: saves each new Roblox version (Windows Player, LIVE channel) into this repo's
 // GitHub releases, so it can still be installed after Roblox stops offering it. HuiClient lists them in
 // Settings > Deployment. Running it when the newest version is already saved does nothing.
-// Needs Node 18+ and the GitHub CLI (gh) signed in with access to this repo.
+// GitHub runs it every 30 minutes (.github/workflows/archive.yml). By hand: Node 18+ and the GitHub CLI signed in.
 const { execFileSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -28,17 +28,25 @@ function parseManifest(text) {
   return out;
 }
 
-// Roblox's deploy log hides version ids now, but still lists each build's number with the time it went out.
+// A wall-clock time in Roblox's time zone (US Pacific, summer time included) as a UTC ISO string.
+function pacificToUtc(y, mo, d, h, mi, s) {
+  const wall = Date.UTC(y, mo - 1, d, h, mi, s);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' })
+    .formatToParts(new Date(wall)).map((p) => [p.type, +p.value]));
+  const offset = wall - Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return new Date(wall + offset).toISOString();
+}
+
+// Roblox's deploy log hides version ids now, but still lists each build's number with the time it went out
+// (in Pacific time: its newest line always matches the file's own UTC change time minus 7 or 8 hours).
 async function robloxRelease(number) {
   const fileVersion = number.split('.').join(', ');
   const history = await get(`${CDN}/DeployHistory.txt`).catch(() => '');
   const line = history.split(/\r?\n/).find((l) => l.startsWith('New WindowsPlayer ') && l.includes(`file version: ${fileVersion},`));
   const m = line && line.match(/ at (\d+)\/(\d+)\/(\d+) (\d+):(\d+):(\d+) (AM|PM)/);
   if (!m) return '';
-  const [, mo, d, y, h, mi, s, ap] = m;
-  const hour = (+h % 12) + (ap === 'PM' ? 12 : 0);
-  const two = (n) => String(n).padStart(2, '0');
-  return `${y}-${two(mo)}-${two(d)} ${two(hour)}:${mi}:${s}`;
+  const [, mo, d, y, h, mi, s, ap] = m.map((x) => (/^\d+$/.test(x) ? +x : x));
+  return pacificToUtc(y, mo, d, (h % 12) + (ap === 'PM' ? 12 : 0), mi, s);
 }
 
 async function download(url, file, md5) {
@@ -82,7 +90,7 @@ async function main() {
       `Saved: ${new Date().toISOString()}`,
       '',
       'Windows Player, LIVE channel. Install it from HuiClient > Settings > Deployment.',
-      'The release time is from Roblox\'s own deploy log.',
+      'The release time (UTC) is from Roblox\'s own deploy log.',
     ].join('\n');
     const files = [manifestName, ...pkgs.map((p) => `${hash}-${p.name}`)].map((f) => path.join(dir, f));
     gh(['release', 'create', hash, ...files, '-R', REPO, '--title', `${number}${released ? ` (${released.slice(0, 10)})` : ''}`, '--notes', notes], 'inherit');
@@ -93,4 +101,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch((e) => { log(`Failed: ${e.message}`); process.exitCode = 1; });
-module.exports = { parseManifest, robloxRelease };
+module.exports = { pacificToUtc, parseManifest, robloxRelease };
