@@ -12,4 +12,6 @@ Needs [Node.js](https://nodejs.org) 18 or newer and the [GitHub CLI](https://cli
 - `schedule.cmd`: check every hour in the background while you're signed in to Windows. Output goes to `archive.log`.
 - `unschedule.cmd`: stop the hourly check.
 
-Roblox only shares the id of its newest version, so versions released before the archive started can't be added. Keep this repo private: the files are Roblox's.
+HuiClient reads these releases through GitHub's public API, so everyone using HuiClient can install them once this repo is public. It tries Roblox's own servers first and only downloads from here when Roblox no longer has a version.
+
+Roblox only shares the id of its newest version, so versions released before the archive started can't be added.
