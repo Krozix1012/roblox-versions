@@ -1,9 +1,10 @@
-# Checks for a new Roblox version every 30 minutes on GitHub's servers and saves it as a release.
-# GitHub may start a scheduled run a few minutes late. "Run workflow" on the Actions tab starts one now.
+# Checks for a new Roblox version and saves it as a release. GitHub starts scheduled runs late or skips them
+# when it's busy, so each run keeps asking every 2 minutes for 10 minutes, and runs are asked for hourly.
+# "Run workflow" on the Actions tab starts one now.
 name: Save new Roblox versions
 on:
   schedule:
-    - cron: '17,47 * * * *'
+    - cron: '7 * * * *'
   workflow_dispatch:
 permissions:
   contents: write
@@ -11,9 +12,9 @@ concurrency: archive
 jobs:
   archive:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - run: node archive.js
+      - run: node archive.js --watch 10
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

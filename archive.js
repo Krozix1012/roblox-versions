@@ -63,11 +63,39 @@ async function download(url, file, md5) {
   }
 }
 
+// Roblox rolls a new version out gradually, so its two version addresses can answer differently, and one
+// machine can keep getting the old version for hours. Both are asked, and every version either names is saved.
+const SOURCES = [
+  'https://clientsettingscdn.roblox.com/v2/client-version/WindowsPlayer/channel/LIVE',
+  'https://clientsettings.roblox.com/v2/client-version/WindowsPlayer/channel/LIVE',
+];
+async function liveVersions() {
+  const found = new Map();
+  for (const url of SOURCES) {
+    try {
+      const v = JSON.parse(await get(url));
+      if (HASH_RE.test(v.clientVersionUpload || '')) found.set(v.clientVersionUpload, v.version);
+    } catch (e) { log(`Couldn't ask ${new URL(url).hostname}: ${e.message}`); }
+  }
+  if (!found.size) throw new Error("Roblox didn't say which version is current.");
+  return [...found].map(([hash, number]) => ({ hash, number }));
+}
+const isSaved = (hash) => { try { gh(['release', 'view', hash, '-R', REPO]); return true; } catch { return false; } };
+
+// --watch <minutes>: keep asking every 2 minutes for that long, to catch a version that's still rolling out.
 async function main() {
-  const live = JSON.parse(await get('https://clientsettings.roblox.com/v2/client-version/WindowsPlayer/channel/LIVE'));
-  const hash = live.clientVersionUpload, number = live.version;
-  if (!HASH_RE.test(hash || '')) throw new Error(`Roblox returned an odd version id: ${hash}`);
-  try { gh(['release', 'view', hash, '-R', REPO]); log(`${number} (${hash}) is already saved.`); return; } catch {}
+  const at = process.argv.indexOf('--watch'), until = Date.now() + (at > 0 ? +process.argv[at + 1] || 0 : 0) * 60000;
+  for (;;) {
+    for (const v of await liveVersions()) {
+      if (isSaved(v.hash)) log(`${v.number} (${v.hash}) is already saved.`);
+      else await save(v);
+    }
+    if (Date.now() + 120000 > until) return;
+    await new Promise((r) => setTimeout(r, 120000));
+  }
+}
+
+async function save({ hash, number }) {
 
   log(`New version ${number} (${hash}). Downloading...`);
   const manifestName = `${hash}-rbxPkgManifest.txt`;
